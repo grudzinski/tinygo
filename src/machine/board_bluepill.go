@@ -69,6 +69,16 @@ const (
 	LED = PC13
 )
 
+const (
+	usb_STRING_PRODUCT      = "BluePill"
+	usb_STRING_MANUFACTURER = "STMicroelectronics"
+)
+
+var (
+	usb_VID uint16 = 0x16C0
+	usb_PID uint16 = 0x05E1
+)
+
 var DefaultUART = UART1
 
 // UART pins
