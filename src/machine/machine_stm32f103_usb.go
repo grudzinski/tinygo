@@ -14,9 +14,9 @@ import (
 const NumberOfUSBEndpoints = 8
 
 const (
-	// Each tBTDEntry is unsafe.Sizeof(tBTDEntry{}) CPU bytes; PMA uses 2-byte stride
+	// Each btdEntry is unsafe.Sizeof(btdEntry{}) CPU bytes; PMA uses 2-byte stride
 	// so it occupies half as many PMA bytes.
-	pmaBTDSize = uint32(NumberOfUSBEndpoints) * uint32(unsafe.Sizeof(tBTDEntry{}))/2
+	pmaBTDSize = uint32(NumberOfUSBEndpoints) * uint32(unsafe.Sizeof(btdEntry{})) / 2
 	pmaBufSize = usb.EndpointPacketSize
 
 	ep0TXOffset = pmaBTDSize + 0*pmaBufSize
@@ -26,31 +26,33 @@ const (
 	ep3TXOffset = pmaBTDSize + 4*pmaBufSize
 )
 
-var epBufTXOffset = [NumberOfUSBEndpoints]uint32{
-	0: ep0TXOffset,
-	1: ep1TXOffset,
-	3: ep3TXOffset,
+func epBufTXOffset(ep uint32) uint32 {
+	switch ep {
+	case 0:
+		return ep0TXOffset
+	case 1:
+		return ep1TXOffset
+	case 3:
+		return ep3TXOffset
+	default:
+		return 0
+	}
 }
 
-var epBufRXOffset = [NumberOfUSBEndpoints]uint32{
-	0: ep0RXOffset,
-	2: ep2RXOffset,
+func epBufRXOffset(ep uint32) uint32 {
+	switch ep {
+	case 0:
+		return ep0RXOffset
+	case 2:
+		return ep2RXOffset
+	default:
+		return 0
+	}
 }
 
-var endPoints = []uint32{
-	usb.CONTROL_ENDPOINT: usb.ENDPOINT_TYPE_CONTROL,
-	usb.CDC_ENDPOINT_ACM: usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn,
-	usb.CDC_ENDPOINT_OUT: usb.ENDPOINT_TYPE_BULK | usb.EndpointOut,
-	usb.CDC_ENDPOINT_IN:  usb.ENDPOINT_TYPE_BULK | usb.EndpointIn,
-	4:                    usb.ENDPOINT_TYPE_DISABLE,
-	5:                    usb.ENDPOINT_TYPE_DISABLE,
-	6:                    usb.ENDPOINT_TYPE_DISABLE,
-	7:                    usb.ENDPOINT_TYPE_DISABLE,
-}
-
-// tBTDEntry is one entry in the USB Buffer Table Descriptor.
+// btdEntry is one entry in the USB Buffer Table Descriptor.
 // Each 16-bit field occupies a 32-bit CPU word (PMA stride).
-type tBTDEntry struct {
+type btdEntry struct {
 	addrTX  volatile.Register32
 	countTX volatile.Register32
 	addrRX  volatile.Register32
@@ -64,7 +66,7 @@ const usbPMABase = uintptr(0x40006000)
 // (each uint32 holds 2 PMA bytes). Index = PMA byte offset / 2.
 var pmaMem = (*[256]uint32)(unsafe.Pointer(usbPMABase))
 
-var btable = (*[8]tBTDEntry)(unsafe.Pointer(usbPMABase))
+var btable = (*[8]btdEntry)(unsafe.Pointer(usbPMABase))
 
 func pmaCopy(pmaOffset uint32, src []byte) {
 	for i := 0; i < len(src); i += 2 {
@@ -93,7 +95,7 @@ const (
 	epStatValid
 
 	eprInvariant  = stm32.USB_EPR_EP_TYPE_Msk | stm32.USB_EPR_EP_KIND_Msk | stm32.USB_EPR_EA_Msk
-	eprPreserve = eprInvariant | stm32.USB_EPR_CTR_TX_Msk | stm32.USB_EPR_CTR_RX_Msk
+	eprPreserve   = eprInvariant | stm32.USB_EPR_CTR_TX_Msk | stm32.USB_EPR_CTR_RX_Msk
 	eprToggleBits = stm32.USB_EPR_STAT_TX_Msk | stm32.USB_EPR_DTOG_TX_Msk |
 		stm32.USB_EPR_STAT_RX_Msk | stm32.USB_EPR_DTOG_RX_Msk
 
@@ -163,7 +165,6 @@ var (
 	}
 )
 
-
 func (dev *USBDevice) Configure(_ UARTConfig) error {
 	// Drive PA12 (D+) low briefly so the host sees a disconnect/reconnect edge.
 	// Without this, the host may have given up on enumeration before our firmware
@@ -219,25 +220,26 @@ func handleUSBIRQ(_ interrupt.Interrupt) {
 
 func handleTXDone(ep uint32) {
 	clearCTRTX(ep)
-	switch {
-	case ep == 0:
-		if pendingAddress != 0 {
-			stm32.USB.DADDR.Set(stm32.USB_DADDR_EF | (uint32(pendingAddress) & stm32.USB_DADDR_ADD_Msk))
-			pendingAddress = 0
+	if ep != 0 {
+		if h := usbTxHandler[ep]; h != nil {
+			h()
 		}
-		if sendOnEP0DATADONE.offset > 0 {
-			data := sendOnEP0DATADONE.data[sendOnEP0DATADONE.offset:]
-			count := len(data)
-			if count > usb.EndpointPacketSize {
-				count = usb.EndpointPacketSize
-				sendOnEP0DATADONE.offset += count
-			} else {
-				sendOnEP0DATADONE.offset = 0
-			}
-			sendViaEPIn(0, data, count)
+		return
+	}
+	if pendingAddress != 0 {
+		stm32.USB.DADDR.Set(stm32.USB_DADDR_EF | (uint32(pendingAddress) & stm32.USB_DADDR_ADD_Msk))
+		pendingAddress = 0
+	}
+	if sendOnEP0DATADONE.offset > 0 {
+		data := sendOnEP0DATADONE.data[sendOnEP0DATADONE.offset:]
+		count := len(data)
+		if count > usb.EndpointPacketSize {
+			count = usb.EndpointPacketSize
+			sendOnEP0DATADONE.offset += count
+		} else {
+			sendOnEP0DATADONE.offset = 0
 		}
-	case usbTxHandler[ep] != nil:
-		usbTxHandler[ep]()
+		sendViaEPIn(0, data, count)
 	}
 }
 
@@ -299,7 +301,8 @@ func initControlEndpoint(ep uint32) {
 
 func initTXEndpoint(ep, eprType uint32) {
 	e := &btable[ep]
-	e.addrTX.Set(epBufTXOffset[ep])
+	off := epBufTXOffset(ep)
+	e.addrTX.Set(off)
 	e.countTX.Set(0)
 	eprSet(ep, eprType|ep)
 	setStatTX(ep, epStatNAK)
@@ -307,7 +310,8 @@ func initTXEndpoint(ep, eprType uint32) {
 
 func initRXEndpoint(ep, eprType uint32) {
 	e := &btable[ep]
-	e.addrRX.Set(epBufRXOffset[ep])
+	off := epBufRXOffset(ep)
+	e.addrRX.Set(off)
 	e.countRX.Set(countRXBuf64)
 	eprSet(ep, eprType|ep)
 	setStatRX(ep, epStatValid)
@@ -331,7 +335,8 @@ func initEndpoint(ep, config uint32) {
 
 func sendViaEPIn(ep uint32, data []byte, count int) {
 	if count > 0 {
-		pmaCopy(epBufTXOffset[ep], data[:count])
+		off := epBufTXOffset(ep)
+		pmaCopy(off, data[:count])
 	}
 	btable[ep].countTX.Set(uint32(count))
 	setStatTX(ep, epStatValid)
@@ -368,7 +373,8 @@ func rxCount(ep uint32) uint32 {
 func handleEndpointRx(ep uint32) []byte {
 	count := rxCount(ep)
 	buf := udd_ep_out_cache_buffer[ep][:count]
-	pmaFetch(epBufRXOffset[ep], buf)
+	off := epBufRXOffset(ep)
+	pmaFetch(off, buf)
 	return buf
 }
 
@@ -388,15 +394,6 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	pmaFetch(ep0RXOffset, b[:count])
 	clearCTRRX(0)
 	return b, nil
-}
-
-// aircr VECTKEY write key — required by Cortex-M to unlock AIRCR writes.
-const aircrVECTKEY = 0x05FA << stm32.SCB_AIRCR_VECTKEYSTAT_Pos
-
-func EnterBootloader() {
-	stm32.SCB.AIRCR.Set(aircrVECTKEY | stm32.SCB_AIRCR_SYSRESETREQ)
-	for {
-	}
 }
 
 func (dev *USBDevice) SetStallEPIn(ep uint32) {
