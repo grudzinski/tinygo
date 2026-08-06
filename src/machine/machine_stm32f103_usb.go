@@ -272,10 +272,12 @@ func handleSetup() {
 func handleRXDone(ep uint32) {
 	clearCTRRX(ep)
 	data := handleEndpointRx(ep)
-	if h := usbRxHandler[ep]; h != nil {
-		h(data)
+	// A handler returning false keeps STAT_RX at NAK (set by hardware on reception),
+	// so the host retries the transfer until the handler is ready.
+	h := usbRxHandler[ep]
+	if h == nil || h(data) {
+		AckUsbOutTransfer(ep)
 	}
-	AckUsbOutTransfer(ep)
 }
 
 func onUSBReset() {
