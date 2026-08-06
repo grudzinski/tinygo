@@ -253,6 +253,9 @@ func handleTXDone(ep uint32) {
 
 func handleSetup() {
 	clearCTRRX(0)
+	// A new SETUP cancels any control transfer still in progress, so the
+	// continuation left over from it must not leak into this one.
+	sendOnEP0DATADONE.offset = 0
 	pmaFetch(ep0RXOffset, udd_ep_control_cache_buffer[:8])
 	setup := usb.NewSetup(udd_ep_control_cache_buffer[:8])
 	setStatRX(0, epStatValid)
