@@ -194,8 +194,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 	for i := 0; i < NumberOfUSBEndpoints; i++ {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
-			buf := handleEndpointRx(uint32(i))
-			if usbRxHandler[i] == nil || usbRxHandler[i](buf) {
+			if usbRxHandler[i] == nil || usbRxHandler[i](uint32(i)) {
 				AckUsbOutTransfer(uint32(i))
 			}
 			exitCriticalSection()
@@ -284,11 +283,15 @@ func sendUSBPacket(ep uint32, data []byte) {
 	)
 }
 
-func handleEndpointRx(ep uint32) []byte {
-	// get data
+// ReadUSBEndpoint copies the packet received on ep into dst1, spilling into dst2
+// once dst1 is full, and returns the number of bytes copied. Bytes that fit in
+// neither are dropped.
+func ReadUSBEndpoint(ep uint32, dst1, dst2 []byte) int {
 	count := int(nrf.USBD.EPOUT[ep].AMOUNT.Get())
-
-	return udd_ep_out_cache_buffer[ep][:count]
+	buf := udd_ep_out_cache_buffer[ep][:count]
+	n := copy(dst1, buf)
+	n += copy(dst2, buf[n:])
+	return n
 }
 
 // AckUsbOutTransfer is called to acknowledge the completion of a USB OUT transfer.
