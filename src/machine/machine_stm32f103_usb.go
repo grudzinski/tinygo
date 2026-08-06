@@ -335,6 +335,9 @@ func initEndpoint(ep, config uint32) {
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn:
 		initTXEndpoint(ep, eprTypeInterrupt)
 
+	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
+		initRXEndpoint(ep, eprTypeInterrupt)
+
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointOut:
 		initRXEndpoint(ep, eprTypeBulk)
 
