@@ -187,9 +187,10 @@ func (usbcdc *USBCDC) RTS() bool {
 	return (usbLineInfo.lineState & usb_CDC_LINESTATE_RTS) > 0
 }
 
-func cdcCallbackRx(b []byte) {
-	free := USB.rx.Free()
-	USB.rx.Put(b[:min(len(b), int(free))])
+func cdcCallbackRx(ep uint32) {
+	data1, data2 := USB.rx.Reserve()
+	n := machine.ReadUSBEndpoint(ep, data1, data2)
+	USB.rx.Commit(uint32(n))
 }
 
 var cdcSetupBuff [cdcLineInfoSize]byte

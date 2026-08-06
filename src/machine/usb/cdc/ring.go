@@ -71,6 +71,35 @@ func (r *ring512) Discard(numBytes uint32) {
 	r.tail.Store(tail + numBytes)
 }
 
+// Reserve returns contiguous views into the writable portions of the buffer
+// without advancing the write position. When the free space wraps around the end
+// of the internal buffer, two segments are returned, otherwise data2 is nil.
+// Returns nil,nil when full. The writer fills the segments in order and then
+// calls Commit with the number of bytes it wrote.
+func (r *ring512) Reserve() (data1, data2 []byte) {
+	head, tail := r.lims()
+	free := uint32(ringBufLen) - (head - tail)
+	if free == 0 {
+		return nil, nil
+	}
+	pos := head & ringMask
+	contig := ringBufLen - pos
+	if contig >= free {
+		return r.buf[pos : pos+free], nil
+	}
+	return r.buf[pos:], r.buf[:free-contig]
+}
+
+// Commit advances the write position over numBytes filled through Reserve.
+// numBytes must not exceed what the preceding Reserve returned.
+func (r *ring512) Commit(numBytes uint32) {
+	if numBytes == 0 {
+		return
+	}
+	head, _ := r.lims()
+	r.head.Store(head + numBytes)
+}
+
 // Put writes data into the ring buffer. Returns true if all data was
 // written, false if insufficient free space (no partial writes).
 func (r *ring512) Put(data []byte) bool {

@@ -204,6 +204,51 @@ func TestRing512_WrapDataIntegrity(t *testing.T) {
 	}
 }
 
+func TestRing512_ReserveCommit(t *testing.T) {
+	var r ring512
+	d1, d2 := r.Reserve()
+	if len(d1) != ringBufLen || d2 != nil {
+		t.Fatalf("Reserve on empty ring = (%d, %d), want (%d, 0)", len(d1), len(d2), ringBufLen)
+	}
+	copy(d1, "hello")
+	r.Commit(5)
+	if r.Used() != 5 {
+		t.Fatalf("Used = %d, want 5", r.Used())
+	}
+	got := peekAll(&r)
+	if !bytes.Equal(got, []byte("hello")) {
+		t.Fatalf("Peek = %q, want %q", got, "hello")
+	}
+}
+
+func TestRing512_ReserveCommitWrapped(t *testing.T) {
+	var r ring512
+	fill := bytes.Repeat([]byte("x"), ringBufLen-3)
+	r.Put(fill)
+	r.Discard(ringBufLen - 3)
+	d1, d2 := r.Reserve()
+	if len(d1) != 3 || len(d2) != ringBufLen-3 {
+		t.Fatalf("Reserve = (%d, %d), want (3, %d)", len(d1), len(d2), ringBufLen-3)
+	}
+	copy(d1, "abc")
+	copy(d2, "de")
+	r.Commit(5)
+	got := drain(t, &r)
+	if !bytes.Equal(got, []byte("abcde")) {
+		t.Fatalf("drain = %q, want %q", got, "abcde")
+	}
+}
+
+func TestRing512_ReserveFull(t *testing.T) {
+	var r ring512
+	fill := bytes.Repeat([]byte("y"), ringBufLen)
+	r.Put(fill)
+	d1, d2 := r.Reserve()
+	if d1 != nil || d2 != nil {
+		t.Fatalf("Reserve on full ring = (%v, %v), want (nil, nil)", d1, d2)
+	}
+}
+
 // --- Edge Cases ---
 
 func TestRing512_DiscardPartial(t *testing.T) {
