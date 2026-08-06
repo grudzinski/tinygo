@@ -39,7 +39,7 @@ func epBufTXOffset(ep uint32) uint32 {
 	case 3:
 		return ep3TXOffset
 	default:
-		return 0
+		panic("unreachable")
 	}
 }
 
@@ -52,7 +52,7 @@ func epBufRXOffset(ep uint32) uint32 {
 	case 3:
 		return ep3RXOffset
 	default:
-		return 0
+		panic("unreachable")
 	}
 }
 
