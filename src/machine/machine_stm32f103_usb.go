@@ -74,23 +74,41 @@ var pmaMem = (*[256]volatile.Register32)(unsafe.Pointer(usbPMABase))
 
 var btable = (*[8]btdEntry)(unsafe.Pointer(usbPMABase))
 
+// pmaCopy and pmaFetch run in the USB interrupt, so they trade a few bytes of
+// flash for a tight loop: ranging over a PMA subslice keeps the index provably
+// in bounds, and the halfword access to the buffer moves two bytes per
+// iteration. The halfword access may be unaligned, which Cortex-M3 handles for
+// normal memory (CCR.UNALIGN_TRP is left at 0).
 func pmaCopy(pmaOffset uint32, src []byte) {
-	for i := 0; i < len(src); i += 2 {
-		v := uint32(src[i])
-		if i+1 < len(src) {
-			v |= uint32(src[i+1]) << 8
-		}
-		pmaMem[(pmaOffset+uint32(i))/2].Set(v)
+	n := len(src)
+	first := pmaOffset / 2
+	mem := pmaMem[first : first+uint32(n)/2]
+	data := unsafe.SliceData(src)
+	base := unsafe.Pointer(data)
+	for i := range mem {
+		p := unsafe.Add(base, 2*i)
+		v := *(*uint16)(p)
+		mem[i].Set(uint32(v))
+	}
+	if n%2 != 0 {
+		pmaMem[first+uint32(n)/2].Set(uint32(src[n-1]))
 	}
 }
 
 func pmaFetch(pmaOffset uint32, dst []byte) {
-	for i := 0; i < len(dst); i += 2 {
-		v := pmaMem[(pmaOffset+uint32(i))/2].Get()
-		dst[i] = byte(v)
-		if i+1 < len(dst) {
-			dst[i+1] = byte(v >> 8)
-		}
+	n := len(dst)
+	first := pmaOffset / 2
+	mem := pmaMem[first : first+uint32(n)/2]
+	data := unsafe.SliceData(dst)
+	base := unsafe.Pointer(data)
+	for i := range mem {
+		v := mem[i].Get()
+		p := unsafe.Add(base, 2*i)
+		*(*uint16)(p) = uint16(v)
+	}
+	if n%2 != 0 {
+		v := pmaMem[first+uint32(n)/2].Get()
+		dst[n-1] = byte(v)
 	}
 }
 
