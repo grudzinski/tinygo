@@ -22,8 +22,10 @@ const (
 	ep0TXOffset = pmaBTDSize + 0*pmaBufSize
 	ep0RXOffset = pmaBTDSize + 1*pmaBufSize
 	ep1TXOffset = pmaBTDSize + 2*pmaBufSize
-	ep2RXOffset = pmaBTDSize + 3*pmaBufSize
-	ep3TXOffset = pmaBTDSize + 4*pmaBufSize
+	ep2TXOffset = pmaBTDSize + 3*pmaBufSize
+	ep2RXOffset = pmaBTDSize + 4*pmaBufSize
+	ep3TXOffset = pmaBTDSize + 5*pmaBufSize
+	ep3RXOffset = pmaBTDSize + 6*pmaBufSize
 )
 
 func epBufTXOffset(ep uint32) uint32 {
@@ -32,6 +34,8 @@ func epBufTXOffset(ep uint32) uint32 {
 		return ep0TXOffset
 	case 1:
 		return ep1TXOffset
+	case 2:
+		return ep2TXOffset
 	case 3:
 		return ep3TXOffset
 	default:
@@ -45,6 +49,8 @@ func epBufRXOffset(ep uint32) uint32 {
 		return ep0RXOffset
 	case 2:
 		return ep2RXOffset
+	case 3:
+		return ep3RXOffset
 	default:
 		return 0
 	}
