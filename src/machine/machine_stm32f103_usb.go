@@ -396,17 +396,23 @@ func AckUsbOutTransfer(ep uint32) {
 }
 
 func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
-	setStatRX(0, epStatValid)
-	for !eprRegs[0].HasBits(stm32.USB_EPR_CTR_RX_Msk) {
-	}
-	count := rxCount(0)
-	if count > cdcLineInfoSize {
-		count = cdcLineInfoSize
-	}
 	var b [cdcLineInfoSize]byte
-	pmaFetch(ep0RXOffset, b[:count])
-	clearCTRRX(0)
-	return b, nil
+	setStatRX(0, epStatValid)
+	epr := &eprRegs[0]
+	const timeout = 300000
+	for i := 0; i < timeout; i++ {
+		if !epr.HasBits(stm32.USB_EPR_CTR_RX_Msk) {
+			continue
+		}
+		count := rxCount(0)
+		if count > cdcLineInfoSize {
+			count = cdcLineInfoSize
+		}
+		pmaFetch(ep0RXOffset, b[:count])
+		clearCTRRX(0)
+		return b, nil
+	}
+	return b, ErrUSBReadTimeout
 }
 
 func (dev *USBDevice) SetStallEPIn(ep uint32) {
