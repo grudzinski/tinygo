@@ -406,6 +406,10 @@ func rxCount(ep uint32) uint32 {
 
 func handleEndpointRx(ep uint32) []byte {
 	count := rxCount(ep)
+	// TODO: the rx handler copies this buffer again into its own. Inverting
+	// usbRxHandler to func(ep uint32) bool plus a read-into call would let
+	// pmaFetch write straight into the class driver's ring, but that touches
+	// every platform and class driver.
 	buf := udd_ep_out_cache_buffer[ep][:count]
 	off := epBufRXOffset(ep)
 	pmaFetch(off, buf)
