@@ -1,4 +1,4 @@
-//go:build stm32f103 && serial.usb
+//go:build bluepill && serial.usb
 
 package runtime
 

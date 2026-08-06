@@ -1,4 +1,4 @@
-//go:build stm32f103
+//go:build bluepill
 
 package machine
 
