@@ -182,8 +182,10 @@ func (dev *USBDevice) Configure(_ UARTConfig) error {
 	}
 	PA12.Configure(PinConfig{Mode: PinInput})
 
-	stm32.RCC.SetAPB1ENR_USBEN(1)
+	// USBPRE must be valid before the USB clock is enabled: once USBEN is set
+	// the bit can no longer be reset (RM0008 RCC_CFGR, bit 22).
 	stm32.RCC.SetCFGR_USBPRE(stm32.RCC_CFGR_USBPRE_DIV1_5) // 72 MHz / 1.5 = 48 MHz
+	stm32.RCC.SetAPB1ENR_USBEN(1)
 
 	stm32.USB.CNTR.Set(stm32.USB_CNTR_FRES) // power up analog section, hold in reset
 	// tSTARTUP ≥ 1μs required before releasing FRES
