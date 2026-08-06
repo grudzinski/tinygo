@@ -4,8 +4,8 @@ type EndpointConfig struct {
 	Index          uint8
 	IsIn           bool
 	TxHandler      func()
-	RxHandler      func([]byte)
-	DelayRxHandler func([]byte) bool
+	RxHandler      func(ep uint32)
+	DelayRxHandler func(ep uint32) bool
 	StallHandler   func(Setup) bool
 	Type           uint8
 }

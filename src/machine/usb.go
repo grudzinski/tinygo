@@ -129,7 +129,7 @@ var usb_trans_buffer [255]uint8
 
 var (
 	usbTxHandler    [NumberOfUSBEndpoints]func()
-	usbRxHandler    [NumberOfUSBEndpoints]func([]byte) bool
+	usbRxHandler    [NumberOfUSBEndpoints]func(ep uint32) bool
 	usbSetupHandler [usb.NumberOfInterfaces]func(usb.Setup) bool
 	usbStallHandler [NumberOfUSBEndpoints]func(usb.Setup) bool
 )
@@ -338,7 +338,7 @@ func lenToCap(b []byte) []byte {
 	return b[:len(b):len(b)]
 }
 
-func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool) {
+func EnableCDC(txHandler func(), rxHandler func(ep uint32), setupHandler func(usb.Setup) bool) {
 	if len(usbDescriptor.Device) == 0 {
 		usbDescriptor = descriptor.CDC
 	}
@@ -393,8 +393,8 @@ func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointC
 				Config:   uint32(ep.Type | usb.EndpointOut),
 			})
 			if ep.RxHandler != nil {
-				usbRxHandler[ep.Index] = func(b []byte) bool {
-					ep.RxHandler(b)
+				usbRxHandler[ep.Index] = func(n uint32) bool {
+					ep.RxHandler(n)
 					return true
 				}
 			} else if ep.DelayRxHandler != nil {
