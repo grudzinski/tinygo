@@ -70,7 +70,7 @@ const usbPMABase = uintptr(0x40006000)
 
 // pmaMem maps the 512-byte PMA as [256]uint32 at 32-bit stride
 // (each uint32 holds 2 PMA bytes). Index = PMA byte offset / 2.
-var pmaMem = (*[256]uint32)(unsafe.Pointer(usbPMABase))
+var pmaMem = (*[256]volatile.Register32)(unsafe.Pointer(usbPMABase))
 
 var btable = (*[8]btdEntry)(unsafe.Pointer(usbPMABase))
 
@@ -80,13 +80,13 @@ func pmaCopy(pmaOffset uint32, src []byte) {
 		if i+1 < len(src) {
 			v |= uint32(src[i+1]) << 8
 		}
-		pmaMem[(pmaOffset+uint32(i))/2] = v
+		pmaMem[(pmaOffset+uint32(i))/2].Set(v)
 	}
 }
 
 func pmaFetch(pmaOffset uint32, dst []byte) {
 	for i := 0; i < len(dst); i += 2 {
-		v := pmaMem[(pmaOffset+uint32(i))/2]
+		v := pmaMem[(pmaOffset+uint32(i))/2].Get()
 		dst[i] = byte(v)
 		if i+1 < len(dst) {
 			dst[i+1] = byte(v >> 8)
